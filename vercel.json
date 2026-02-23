@@ -3,38 +3,24 @@
   "framework": null,
   "buildCommand": null,
   "outputDirectory": ".",
-  "routes": [
-    {
-      "src": "/sw.js",
-      "dest": "/sw.js",
-      "headers": {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Service-Worker-Allowed": "/"
-      }
-    },
-    {
-      "src": "/",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/((?!sw\\.js$).*)", "destination": "/index.html" }
   ],
   "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" }
-      ]
-    },
     {
       "source": "/sw.js",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache" },
         { "key": "Service-Worker-Allowed", "value": "/" },
         { "key": "Content-Type", "value": "application/javascript" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
       ]
     }
   ]
