@@ -31,6 +31,42 @@ const manifestData = {
 const blob = new Blob([JSON.stringify(manifestData)], {type:'application/json'});
 const manifestURL = URL.createObjectURL(blob);
 document.getElementById('pwaManifest').href = manifestURL;
+
+// ── Service Worker Registration ──
+(function() {
+  // Não registar em iframes, contextos inseguros ou file://
+  var isIframe   = window.self !== window.top;
+  var isSecure   = location.protocol === 'https:' || location.hostname === 'localhost';
+  var isVercel   = location.hostname.indexOf('vercel.app') > -1 ||
+                   location.hostname.indexOf('louvor') > -1;
+
+  if (!('serviceWorker' in navigator) || isIframe || !isSecure) {
+    // Silencioso — sem mensagem de erro no console
+    return;
+  }
+
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js', {scope: '/'})
+      .then(function(reg) {
+        console.log('[SW] ✅ Registado — App instalável offline');
+        reg.onupdatefound = function() {
+          var w = reg.installing;
+          if (!w) return;
+          w.onstatechange = function() {
+            if (w.state === 'installed' && navigator.serviceWorker.controller) {
+              if (typeof toast === 'function') toast('🔄 App actualizado!');
+            }
+          };
+        };
+      })
+      .catch(function(err) {
+        // Silencioso em contextos onde SW não é suportado
+        // (ex: iframe, desenvolvimento local)
+        if (isVercel) console.warn('[SW] Registo falhou:', err.message);
+      });
+  });
+})();
+
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -397,6 +433,172 @@ audio::-webkit-media-controls-panel{background:var(--s2);}
   .sdh h2{font-size:1.5rem;}
   .brand-name{font-size:0.88rem;}
 }
+
+/* ── Bible engine styles ── */
+.bv { padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05); cursor:pointer; position:relative; }
+.bv:hover .bv-actions { opacity:1; }
+.bv-actions { display:flex; gap:2px; opacity:0; transition:opacity .2s; position:absolute; right:0; top:8px; background:rgba(6,14,31,0.9); border-radius:8px; padding:2px; }
+.bv.hl { background:rgba(200,146,10,0.12); border-radius:8px; padding:10px 10px; margin:2px 0; border-bottom-color:transparent; }
+.bvn { display:inline-block; min-width:28px; font-weight:800; color:#c8920a; font-size:0.78rem; vertical-align:top; margin-top:3px; flex-shrink:0; font-family:'Cinzel',serif; }
+.bv-text { line-height:1.85; color:#d8e0f0; }
+.bv-title { font-family:'Cinzel',serif; font-size:1.15rem; font-weight:700; color:#e8ab18; margin-bottom:16px; }
+.bv-box { background:rgba(11,24,48,0.5); border:1px solid rgba(255,255,255,0.07); border-radius:16px; padding:22px; margin-bottom:16px; }
+.bv-loading { display:flex; flex-direction:column; align-items:center; gap:14px; padding:48px; color:#7a8eb0; font-size:0.9rem; }
+.bv-spinner { width:32px; height:32px; border:3px solid rgba(200,146,10,0.2); border-top-color:#c8920a; border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.bbooks-g { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; margin-bottom:20px; }
+.bbook { background:rgba(11,24,48,0.6); border:1.5px solid rgba(255,255,255,0.08); border-radius:10px; padding:10px 12px; cursor:pointer; color:#d0d8f0; font-family:'Outfit',sans-serif; font-size:0.84rem; font-weight:600; text-align:left; transition:all .18s; }
+.bbook:hover { border-color:rgba(200,146,10,0.4); background:rgba(200,146,10,0.08); color:#eef2ff; }
+.bbook.on { border-color:#c8920a; background:rgba(200,146,10,0.15); color:#e8ab18; }
+.tbdg { display:inline-block; font-size:0.6rem; padding:2px 5px; border-radius:4px; margin-right:6px; font-weight:800; letter-spacing:.04em; }
+.vt-c { background:rgba(34,197,94,0.15); color:#4ade80; }
+.nt-c { background:rgba(96,165,250,0.15); color:#60a5fa; }
+.chaps { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; }
+.chap { background:rgba(11,24,48,0.6); border:1.5px solid rgba(255,255,255,0.08); border-radius:8px; width:40px; height:40px; cursor:pointer; color:#d0d8f0; font-family:'Outfit',sans-serif; font-size:0.85rem; font-weight:600; display:flex; align-items:center; justify-content:center; transition:all .15s; }
+.chap:hover { border-color:rgba(200,146,10,0.4); background:rgba(200,146,10,0.1); }
+.chap.on { border-color:#c8920a; background:rgba(200,146,10,0.2); color:#e8ab18; font-weight:800; }
+.bsr { margin-top:4px; }
+.bsr-item { background:rgba(11,24,48,0.5); border:1px solid rgba(255,255,255,0.07); border-radius:10px; padding:14px 16px; margin-bottom:10px; }
+.bsr-ref { color:#e8ab18; font-weight:700; font-family:'Cinzel',serif; font-size:0.88rem; margin-bottom:6px; }
+.bsr-txt { color:#d0d8f0; line-height:1.8; font-size:0.9rem; }
+.bsr-txt mark { background:rgba(200,146,10,0.3); color:#e8ab18; border-radius:3px; padding:0 2px; }
+
+
+/* ══ Floating Install Button ══ */
+#floatInstallBtn {
+  position: fixed;
+  right: 18px;
+  bottom: 90px;  /* above mini player */
+  z-index: 9000;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  filter: drop-shadow(0 4px 18px rgba(200,146,10,0.45));
+  animation: installPulse 2.5s ease-in-out infinite;
+}
+@keyframes installPulse {
+  0%,100% { transform: scale(1) translateY(0); filter: drop-shadow(0 4px 18px rgba(200,146,10,0.45)); }
+  50%      { transform: scale(1.06) translateY(-3px); filter: drop-shadow(0 8px 28px rgba(200,146,10,0.7)); }
+}
+#floatInstallBtn .fib-btn {
+  background: linear-gradient(135deg, #c8920a, #e8ab18, #c8920a);
+  border: none;
+  border-radius: 50%;
+  width: 58px;
+  height: 58px;
+  cursor: pointer;
+  font-size: 1.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(200,146,10,0.5);
+  transition: transform .15s;
+  position: relative;
+}
+#floatInstallBtn .fib-btn:hover { transform: scale(1.1); }
+#floatInstallBtn .fib-label {
+  background: linear-gradient(135deg,#c8920a,#e8ab18);
+  color: #060e1f;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  padding: 3px 10px;
+  border-radius: 0 0 10px 10px;
+  white-space: nowrap;
+  margin-top: -1px;
+}
+#floatInstallBtn .fib-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #e8ab18;
+  border: 2px solid #060e1f;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #060e1f;
+  font-weight: 900;
+}
+
+/* ══ Install Modal ══ */
+#installModal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(8px);
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+#installModal.on { display: flex; }
+#installModalBox {
+  background: linear-gradient(180deg, #0d1b38 0%, #060e1f 100%);
+  border: 1px solid rgba(200,146,10,0.3);
+  border-radius: 24px 24px 0 0;
+  width: 100%;
+  max-width: 480px;
+  padding: 28px 24px 40px;
+  animation: slideUp .3s ease;
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.install-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.install-step:last-child { border-bottom: none; }
+.install-step-num {
+  background: linear-gradient(135deg,#c8920a,#e8ab18);
+  color: #060e1f;
+  font-weight: 900;
+  font-size: 0.82rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: 'Cinzel', serif;
+}
+.install-step-text {
+  color: #d0d8f0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  padding-top: 3px;
+}
+.install-step-text strong { color: #e8ab18; }
+.install-os-tab {
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  border-radius: 9px;
+  color: #7a8eb0;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: all .18s;
+}
+.install-os-tab.active {
+  background: rgba(200,146,10,0.18);
+  border-color: #c8920a;
+  color: #e8ab18;
+}
+
 </style>
 </head>
 <body>
@@ -719,10 +921,12 @@ audio::-webkit-media-controls-panel{background:var(--s2);}
   <!-- ═══════════ BÍBLIA ═══════════ -->
   <div class="view" id="view-biblia">
     <div class="stitle"><div class="stitle-bar"></div><h2>📖 Bíblia Sagrada</h2></div>
-    <div class="stabs" style="margin-bottom:22px">
+    <div class="stabs" style="margin-bottom:22px;flex-wrap:wrap">
       <button class="stab active" onclick="showBTab('livros',this)">📚 Livros</button>
       <button class="stab" onclick="showBTab('buscar',this)">🔍 Buscar</button>
-      <button class="stab" onclick="showBTab('vdia',this)">✨ Versículo do Dia</button>
+      <button class="stab" onclick="showBTab('vdia',this)">✨ Versículo</button>
+      <button class="stab" onclick="showBTab('favs',this)">❤️ Favoritos</button>
+      <button class="stab" onclick="showBTab('hist',this)">🕐 Histórico</button>
     </div>
     <div id="btab-livros">
       <div style="margin-bottom:16px"><select style="background:rgba(11,24,48,0.8);border:1px solid var(--border);border-radius:9px;padding:9px 15px;color:var(--white);font-family:'Outfit',sans-serif;font-size:0.87rem;outline:none;cursor:pointer" onchange="bFilter=this.value;renderBBooks()"><option value="all">📖 Todos (66)</option><option value="vt">Antigo Testamento (39)</option><option value="nt">Novo Testamento (27)</option></select></div>
@@ -740,7 +944,9 @@ audio::-webkit-media-controls-panel{background:var(--s2);}
       </div>
       <div id="bSearchRes"></div>
     </div>
-    <div id="btab-vdia" style="display:none"><div class="bv-box" id="vDiaBox"></div></div>
+    <div id="btab-vdia" style="display:none"><div id="vDiaBox"></div></div>
+    <div id="btab-favs" style="display:none"></div>
+    <div id="btab-hist" style="display:none"></div>
   </div>
 
   <!-- ═══════════ ADMIN ═══════════ -->
@@ -1738,69 +1944,546 @@ function closeModal(id){S(id).classList.remove('on');}
 // ══════════════════════════
 // BÍBLIA SAGRADA
 // ══════════════════════════
-const BOOKS=[
-  {n:'Gênesis',c:50,t:'vt'},{n:'Êxodo',c:40,t:'vt'},{n:'Levítico',c:27,t:'vt'},{n:'Números',c:36,t:'vt'},{n:'Deuteronômio',c:34,t:'vt'},{n:'Josué',c:24,t:'vt'},{n:'Juízes',c:21,t:'vt'},{n:'Rute',c:4,t:'vt'},{n:'1 Samuel',c:31,t:'vt'},{n:'2 Samuel',c:24,t:'vt'},{n:'1 Reis',c:22,t:'vt'},{n:'2 Reis',c:25,t:'vt'},{n:'1 Crônicas',c:29,t:'vt'},{n:'2 Crônicas',c:36,t:'vt'},{n:'Esdras',c:10,t:'vt'},{n:'Neemias',c:13,t:'vt'},{n:'Ester',c:10,t:'vt'},{n:'Jó',c:42,t:'vt'},{n:'Salmos',c:150,t:'vt'},{n:'Provérbios',c:31,t:'vt'},{n:'Eclesiastes',c:12,t:'vt'},{n:'Cantares',c:8,t:'vt'},{n:'Isaías',c:66,t:'vt'},{n:'Jeremias',c:52,t:'vt'},{n:'Lamentações',c:5,t:'vt'},{n:'Ezequiel',c:48,t:'vt'},{n:'Daniel',c:12,t:'vt'},{n:'Oseias',c:14,t:'vt'},{n:'Joel',c:3,t:'vt'},{n:'Amós',c:9,t:'vt'},{n:'Obadias',c:1,t:'vt'},{n:'Jonas',c:4,t:'vt'},{n:'Miquéias',c:7,t:'vt'},{n:'Naum',c:3,t:'vt'},{n:'Habacuque',c:3,t:'vt'},{n:'Sofonias',c:3,t:'vt'},{n:'Ageu',c:2,t:'vt'},{n:'Zacarias',c:14,t:'vt'},{n:'Malaquias',c:4,t:'vt'},
-  {n:'Mateus',c:28,t:'nt'},{n:'Marcos',c:16,t:'nt'},{n:'Lucas',c:24,t:'nt'},{n:'João',c:21,t:'nt'},{n:'Atos',c:28,t:'nt'},{n:'Romanos',c:16,t:'nt'},{n:'1 Coríntios',c:16,t:'nt'},{n:'2 Coríntios',c:13,t:'nt'},{n:'Gálatas',c:6,t:'nt'},{n:'Efésios',c:6,t:'nt'},{n:'Filipenses',c:4,t:'nt'},{n:'Colossenses',c:4,t:'nt'},{n:'1 Tessalonicenses',c:5,t:'nt'},{n:'2 Tessalonicenses',c:3,t:'nt'},{n:'1 Timóteo',c:6,t:'nt'},{n:'2 Timóteo',c:4,t:'nt'},{n:'Tito',c:3,t:'nt'},{n:'Filemom',c:1,t:'nt'},{n:'Hebreus',c:13,t:'nt'},{n:'Tiago',c:5,t:'nt'},{n:'1 Pedro',c:5,t:'nt'},{n:'2 Pedro',c:3,t:'nt'},{n:'1 João',c:5,t:'nt'},{n:'2 João',c:1,t:'nt'},{n:'3 João',c:1,t:'nt'},{n:'Judas',c:1,t:'nt'},{n:'Apocalipse',c:22,t:'nt'}
-];
-const VDIA=[
-  {r:'João 3:16',t:'Porque Deus amou o mundo de tal maneira que deu o seu Filho unigênito, para que todo aquele que nele crê não pereça, mas tenha a vida eterna.'},
-  {r:'Filipenses 4:13',t:'Tudo posso em Cristo que me fortalece.'},
-  {r:'Jeremias 29:11',t:'Porque eu sei os pensamentos que tenho a vosso respeito, diz o SENHOR; pensamentos de paz e não de mal, para vos dar o fim que esperais.'},
-  {r:'Isaías 40:31',t:'Os que esperam no SENHOR renovam as suas forças, sobem com asas como águias; correm e não se cansam; caminham e não se fatigam.'},
-  {r:'Isaías 41:10',t:'Não temas, porque eu sou contigo; não te assombres, porque eu sou o teu Deus; eu te fortaleço, e te ajudo, e te sustento com a minha destra fiel.'},
-  {r:'Josué 1:9',t:'Esforça-te, e tem bom ânimo; não te atemorizes, nem te espantes; porque o SENHOR teu Deus é contigo, por onde quer que andares.'},
-  {r:'Provérbios 3:5-6',t:'Confia no SENHOR de todo o teu coração e não te estribes no teu próprio entendimento. Reconhece-o em todos os teus caminhos, e ele endireitará as tuas veredas.'},
-  {r:'Romanos 8:28',t:'E sabemos que todas as coisas contribuem juntamente para o bem daqueles que amam a Deus, daqueles que são chamados segundo o seu propósito.'},
-  {r:'João 14:6',t:'Jesus lhe disse: Eu sou o caminho, e a verdade, e a vida; ninguém vem ao Pai, senão por mim.'},
-  {r:'Mateus 28:19',t:'Portanto, ide, fazei discípulos de todas as nações, batizando-os em nome do Pai, e do Filho, e do Espírito Santo.'},
-  {r:'Apocalipse 22:20',t:'Aquele que dá testemunho destas coisas diz: Certamente venho em breve. Amém! Vem, Senhor Jesus!'},
-  {r:'Mateus 6:33',t:'Mas buscai primeiro o reino de Deus e a sua justiça, e todas estas coisas vos serão acrescentadas.'},
-];
-const BAPI={'Gênesis':'genesis','Êxodo':'exodus','Levítico':'leviticus','Números':'numbers','Deuteronômio':'deuteronomy','Josué':'joshua','Juízes':'judges','Rute':'ruth','1 Samuel':'1samuel','2 Samuel':'2samuel','1 Reis':'1kings','2 Reis':'2kings','1 Crônicas':'1chronicles','2 Crônicas':'2chronicles','Esdras':'ezra','Neemias':'nehemiah','Ester':'esther','Jó':'job','Salmos':'psalms','Provérbios':'proverbs','Eclesiastes':'ecclesiastes','Cantares':'songofsolomon','Isaías':'isaiah','Jeremias':'jeremiah','Lamentações':'lamentations','Ezequiel':'ezekiel','Daniel':'daniel','Oseias':'hosea','Joel':'joel','Amós':'amos','Obadias':'obadiah','Jonas':'jonah','Miquéias':'micah','Naum':'nahum','Habacuque':'habakkuk','Sofonias':'zephaniah','Ageu':'haggai','Zacarias':'zechariah','Malaquias':'malachi','Mateus':'matthew','Marcos':'mark','Lucas':'luke','João':'john','Atos':'acts','Romanos':'romans','1 Coríntios':'1corinthians','2 Coríntios':'2corinthians','Gálatas':'galatians','Efésios':'ephesians','Filipenses':'philippians','Colossenses':'colossians','1 Tessalonicenses':'1thessalonians','2 Tessalonicenses':'2thessalonians','1 Timóteo':'1timothy','2 Timóteo':'2timothy','Tito':'titus','Filemom':'philemon','Hebreus':'hebrews','Tiago':'james','1 Pedro':'1peter','2 Pedro':'2peter','1 João':'1john','2 João':'2john','3 João':'3john','Judas':'jude','Apocalipse':'revelation'};
+// ════════════════════════════════════════════════════════════════
+// BÍBLIA SAGRADA — ENGINE COMPLETO
+// API: bible-api.com · Tradução: Almeida Revista e Corrigida
+// Cache local · Navegação completa · Busca · Favoritos
+// ════════════════════════════════════════════════════════════════
 
-function initBible(){
+const BOOKS = [
+  {n:'Gênesis',c:50,t:'vt'},{n:'Êxodo',c:40,t:'vt'},{n:'Levítico',c:27,t:'vt'},
+  {n:'Números',c:36,t:'vt'},{n:'Deuteronômio',c:34,t:'vt'},{n:'Josué',c:24,t:'vt'},
+  {n:'Juízes',c:21,t:'vt'},{n:'Rute',c:4,t:'vt'},{n:'1 Samuel',c:31,t:'vt'},
+  {n:'2 Samuel',c:24,t:'vt'},{n:'1 Reis',c:22,t:'vt'},{n:'2 Reis',c:25,t:'vt'},
+  {n:'1 Crônicas',c:29,t:'vt'},{n:'2 Crônicas',c:36,t:'vt'},{n:'Esdras',c:10,t:'vt'},
+  {n:'Neemias',c:13,t:'vt'},{n:'Ester',c:10,t:'vt'},{n:'Jó',c:42,t:'vt'},
+  {n:'Salmos',c:150,t:'vt'},{n:'Provérbios',c:31,t:'vt'},{n:'Eclesiastes',c:12,t:'vt'},
+  {n:'Cantares',c:8,t:'vt'},{n:'Isaías',c:66,t:'vt'},{n:'Jeremias',c:52,t:'vt'},
+  {n:'Lamentações',c:5,t:'vt'},{n:'Ezequiel',c:48,t:'vt'},{n:'Daniel',c:12,t:'vt'},
+  {n:'Oseias',c:14,t:'vt'},{n:'Joel',c:3,t:'vt'},{n:'Amós',c:9,t:'vt'},
+  {n:'Obadias',c:1,t:'vt'},{n:'Jonas',c:4,t:'vt'},{n:'Miquéias',c:7,t:'vt'},
+  {n:'Naum',c:3,t:'vt'},{n:'Habacuque',c:3,t:'vt'},{n:'Sofonias',c:3,t:'vt'},
+  {n:'Ageu',c:2,t:'vt'},{n:'Zacarias',c:14,t:'vt'},{n:'Malaquias',c:4,t:'vt'},
+  {n:'Mateus',c:28,t:'nt'},{n:'Marcos',c:16,t:'nt'},{n:'Lucas',c:24,t:'nt'},
+  {n:'João',c:21,t:'nt'},{n:'Atos',c:28,t:'nt'},{n:'Romanos',c:16,t:'nt'},
+  {n:'1 Coríntios',c:16,t:'nt'},{n:'2 Coríntios',c:13,t:'nt'},{n:'Gálatas',c:6,t:'nt'},
+  {n:'Efésios',c:6,t:'nt'},{n:'Filipenses',c:4,t:'nt'},{n:'Colossenses',c:4,t:'nt'},
+  {n:'1 Tessalonicenses',c:5,t:'nt'},{n:'2 Tessalonicenses',c:3,t:'nt'},
+  {n:'1 Timóteo',c:6,t:'nt'},{n:'2 Timóteo',c:4,t:'nt'},{n:'Tito',c:3,t:'nt'},
+  {n:'Filemom',c:1,t:'nt'},{n:'Hebreus',c:13,t:'nt'},{n:'Tiago',c:5,t:'nt'},
+  {n:'1 Pedro',c:5,t:'nt'},{n:'2 Pedro',c:3,t:'nt'},{n:'1 João',c:5,t:'nt'},
+  {n:'2 João',c:1,t:'nt'},{n:'3 João',c:1,t:'nt'},{n:'Judas',c:1,t:'nt'},
+  {n:'Apocalipse',c:22,t:'nt'}
+];
+
+const BAPI = {
+  'Gênesis':'genesis','Êxodo':'exodus','Levítico':'leviticus','Números':'numbers',
+  'Deuteronômio':'deuteronomy','Josué':'joshua','Juízes':'judges','Rute':'ruth',
+  '1 Samuel':'1samuel','2 Samuel':'2samuel','1 Reis':'1kings','2 Reis':'2kings',
+  '1 Crônicas':'1chronicles','2 Crônicas':'2chronicles','Esdras':'ezra',
+  'Neemias':'nehemiah','Ester':'esther','Jó':'job','Salmos':'psalms',
+  'Provérbios':'proverbs','Eclesiastes':'ecclesiastes','Cantares':'songofsolomon',
+  'Isaías':'isaiah','Jeremias':'jeremiah','Lamentações':'lamentations',
+  'Ezequiel':'ezekiel','Daniel':'daniel','Oseias':'hosea','Joel':'joel',
+  'Amós':'amos','Obadias':'obadiah','Jonas':'jonah','Miquéias':'micah',
+  'Naum':'nahum','Habacuque':'habakkuk','Sofonias':'zephaniah','Ageu':'haggai',
+  'Zacarias':'zechariah','Malaquias':'malachi','Mateus':'matthew','Marcos':'mark',
+  'Lucas':'luke','João':'john','Atos':'acts','Romanos':'romans',
+  '1 Coríntios':'1corinthians','2 Coríntios':'2corinthians','Gálatas':'galatians',
+  'Efésios':'ephesians','Filipenses':'philippians','Colossenses':'colossians',
+  '1 Tessalonicenses':'1thessalonians','2 Tessalonicenses':'2thessalonians',
+  '1 Timóteo':'1timothy','2 Timóteo':'2timothy','Tito':'titus',
+  'Filemom':'philemon','Hebreus':'hebrews','Tiago':'james','1 Pedro':'1peter',
+  '2 Pedro':'2peter','1 João':'1john','2 João':'2john','3 João':'3john',
+  'Judas':'jude','Apocalipse':'revelation'
+};
+
+const VDIA = [
+  {r:'João 3:16',    t:'Porque Deus amou o mundo de tal maneira que deu o seu Filho unigênito, para que todo aquele que nele crê não pereça, mas tenha a vida eterna.'},
+  {r:'Filipenses 4:13', t:'Tudo posso em Cristo que me fortalece.'},
+  {r:'Jeremias 29:11',  t:'Porque eu sei os pensamentos que tenho a vosso respeito, diz o SENHOR; pensamentos de paz e não de mal, para vos dar o fim que esperais.'},
+  {r:'Isaías 40:31',    t:'Os que esperam no SENHOR renovam as suas forças, sobem com asas como águias; correm e não se cansam; caminham e não se fatigam.'},
+  {r:'Isaías 41:10',    t:'Não temas, porque eu sou contigo; não te assombres, porque eu sou o teu Deus; eu te fortaleço, e te ajudo, e te sustento com a minha destra fiel.'},
+  {r:'Josué 1:9',       t:'Esforça-te, e tem bom ânimo; não te atemorizes, nem te espantes; porque o SENHOR teu Deus é contigo, por onde quer que andares.'},
+  {r:'Provérbios 3:5',  t:'Confia no SENHOR de todo o teu coração e não te estribes no teu próprio entendimento.'},
+  {r:'Romanos 8:28',    t:'E sabemos que todas as coisas contribuem juntamente para o bem daqueles que amam a Deus, daqueles que são chamados segundo o seu propósito.'},
+  {r:'João 14:6',       t:'Jesus lhe disse: Eu sou o caminho, e a verdade, e a vida; ninguém vem ao Pai, senão por mim.'},
+  {r:'Mateus 28:19',    t:'Portanto, ide, fazei discípulos de todas as nações, batizando-os em nome do Pai, e do Filho, e do Espírito Santo.'},
+  {r:'Salmos 23:1',     t:'O SENHOR é o meu pastor; nada me faltará.'},
+  {r:'Mateus 6:33',     t:'Mas buscai primeiro o reino de Deus e a sua justiça, e todas estas coisas vos serão acrescentadas.'},
+  {r:'Salmos 27:1',     t:'O SENHOR é a minha luz e a minha salvação; a quem temerei? O SENHOR é a força da minha vida; a quem me recearei?'},
+  {r:'Efésios 2:8',     t:'Porque pela graça sois salvos, por meio da fé; e isto não vem de vós; é dom de Deus.'},
+  {r:'2 Timóteo 1:7',   t:'Porque Deus não nos deu o espírito de covardia, mas de poder, de amor e de moderação.'},
+  {r:'1 João 4:8',      t:'Quem não ama não conhece a Deus; porque Deus é amor.'},
+  {r:'Salmos 46:1',     t:'Deus é o nosso refúgio e força, socorro bem presente na angústia.'},
+  {r:'Hebreus 11:1',    t:'Ora, a fé é o firme fundamento das coisas que se esperam e a prova das coisas que não se vêem.'},
+  {r:'Apocalipse 22:20',t:'Aquele que dá testemunho destas coisas diz: Certamente venho em breve. Amém! Vem, Senhor Jesus!'},
+  {r:'Romanos 10:9',    t:'Se com a tua boca confessares ao Senhor Jesus e em teu coração creres que Deus o ressuscitou dos mortos, serás salvo.'},
+  {r:'Gálatas 2:20',    t:'Já estou crucificado com Cristo; e vivo, não mais eu, mas Cristo vive em mim; e a vida que agora vivo na carne, vivo-a pela fé do Filho de Deus.'},
+  {r:'Salmos 119:105',  t:'Lâmpada para os meus pés é a tua palavra, e luz para o meu caminho.'},
+  {r:'Provérbios 22:6', t:'Instrui o menino no caminho em que deve andar; e até quando envelhecer não se desviará dele.'},
+  {r:'João 1:1',        t:'No princípio era o Verbo, e o Verbo estava com Deus, e o Verbo era Deus.'},
+  {r:'Mateus 5:3',      t:'Bem-aventurados os pobres de espírito, porque deles é o reino dos céus.'},
+  {r:'1 Coríntios 13:4',t:'O amor é sofredor, é benigno; o amor não é invejoso; o amor não trata com leviandade, não se ensoberbece.'},
+  {r:'Filipenses 4:6',  t:'Não andeis ansiosos por coisa alguma; em tudo, porém, sejam conhecidas, diante de Deus, as vossas petições, pela oração e súplica, com ação de graças.'},
+  {r:'João 11:25',      t:'Disse-lhe Jesus: Eu sou a ressurreição e a vida; quem crê em mim, ainda que esteja morto, viverá.'},
+  {r:'Salmos 91:1',     t:'Aquele que habita no esconderijo do Altíssimo, à sombra do Onipotente descansará.'},
+  {r:'Romanos 12:2',    t:'E não vos conformeis com este século, mas transformai-vos pela renovação do vosso entendimento.'}
+];
+
+// ── Bible State (bFilter + selBook already declared in main store) ──
+var selChap   = 0;
+var bFavs     = JSON.parse(localStorage.getItem('j7_bfavs') || '[]');
+var bHistory  = JSON.parse(localStorage.getItem('j7_bhist') || '[]');
+var bChapCache = {};  // {key: [{verse,text},...]}
+var bFontSize = parseInt(localStorage.getItem('j7_bfont') || '18');
+
+function saveBFavs()  { localStorage.setItem('j7_bfavs', JSON.stringify(bFavs)); }
+function saveBHist()  { localStorage.setItem('j7_bhist', JSON.stringify(bHistory)); }
+
+// ── Init ──
+function initBible() {
   renderBBooks();
-  const v=VDIA[new Date().getDate()%VDIA.length];
-  S('vDiaBox').innerHTML=`<div class="bv-title">✨ Versículo do Dia — ${new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})}</div><p style="font-size:1.08rem;line-height:1.9;font-style:italic;margin-bottom:16px">"${v.t}"</p><p style="color:var(--gold2);font-weight:700">— ${v.r}</p><hr style="border-color:var(--border);margin:18px 0"><p style="color:var(--gray);font-size:0.78rem">✝ Bíblia Almeida Revista e Corrigida</p>`;
+  renderVDia();
 }
-function renderBBooks(){
-  const f=BOOKS.filter(b=>bFilter==='all'||b.t===bFilter);
-  S('bBooksGrid').innerHTML=f.map(b=>`<button class="bbook ${selBook&&selBook.n===b.n?'on':''}" onclick="selectBook('${b.n}')"><span class="tbdg ${b.t}-c">${b.t==='vt'?'AT':'NT'}</span>${b.n}<span style="color:var(--gray);font-size:0.72rem;display:block;margin-top:2px">${b.c} cap.</span></button>`).join('');
+
+function renderVDia() {
+  var v = VDIA[new Date().getDate() % VDIA.length];
+  var box = document.getElementById('vDiaBox');
+  if (!box) return;
+  var d = new Date();
+  var opts = {weekday:'long', day:'numeric', month:'long'};
+  box.innerHTML =
+    '<div style="background:linear-gradient(135deg,rgba(200,146,10,0.12),rgba(11,24,48,0.4));border:1px solid rgba(200,146,10,0.25);border-radius:16px;padding:24px;margin-bottom:20px">'
+    + '<div style="font-size:0.72rem;font-weight:700;color:#c8920a;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px">✨ Versículo do Dia · ' + d.toLocaleDateString('pt-BR', opts) + '</div>'
+    + '<div style="font-size:1.12rem;line-height:1.95;font-style:italic;color:#eef2ff;margin-bottom:16px">"' + v.t + '"</div>'
+    + '<div style="color:#e8ab18;font-weight:700;font-family:\'Cinzel\',serif;font-size:0.95rem">— ' + v.r + '</div>'
+    + '<div style="display:flex;gap:10px;margin-top:16px">'
+    + '<button onclick="shareVerse(\'' + v.r.replace(/'/g,"\\'") + '\',\'' + v.t.replace(/'/g,"\\'").slice(0,80) + '...' + '\')" style="background:rgba(200,146,10,0.18);border:1px solid rgba(200,146,10,0.3);border-radius:8px;color:#e8ab18;padding:8px 16px;cursor:pointer;font-family:\'Outfit\',sans-serif;font-size:0.8rem;font-weight:600">📤 Partilhar</button>'
+    + '<button onclick="addBFav(\'' + v.r.replace(/'/g,"\\'") + '\',\'' + v.t.replace(/'/g,"\\'").replace(/"/g,'&quot;') + '\')" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#eef2ff;padding:8px 16px;cursor:pointer;font-family:\'Outfit\',sans-serif;font-size:0.8rem">❤️ Favoritar</button>'
+    + '</div>'
+    + '</div>'
+    + '<hr style="border-color:rgba(255,255,255,0.07);margin:0 0 20px">'
+    + '<div style="font-size:0.72rem;color:#7a8eb0">✝ Bíblia Almeida Revista e Corrigida (ARC)</div>';
 }
-function selectBook(name){
-  selBook=BOOKS.find(b=>b.n===name); renderBBooks();
-  S('bChapsArea').style.display='block';
-  S('bBookTitle').innerHTML=`<div class="stitle-bar"></div><h2>📖 ${selBook.n}</h2>`;
-  let h=''; for(let i=1;i<=selBook.c;i++)h+=`<button class="chap" onclick="selectChap(${i},this)">${i}</button>`;
-  S('bChaps').innerHTML=h;
-  S('bVersesArea').innerHTML='<p style="color:var(--gray);padding:14px 0;font-size:0.88rem">👆 Selecione um capítulo</p>';
-  S('bChapsArea').scrollIntoView({behavior:'smooth'});
+
+// ── Book Grid ──
+function renderBBooks() {
+  var f = BOOKS.filter(function(b){ return bFilter === 'all' || b.t === bFilter; });
+  var el = document.getElementById('bBooksGrid');
+  if (!el) return;
+  el.innerHTML = f.map(function(b) {
+    var active = selBook && selBook.n === b.n ? ' on' : '';
+    return '<button class="bbook' + active + '" onclick="selectBook(\'' + b.n.replace(/'/g,"\\'") + '\')">'
+      + '<span class="tbdg ' + b.t + '-c">' + (b.t === 'vt' ? 'AT' : 'NT') + '</span>'
+      + b.n
+      + '<span style="color:var(--gray);font-size:0.7rem;display:block;margin-top:2px">' + b.c + ' cap.</span>'
+      + '</button>';
+  }).join('');
 }
-function selectChap(n,btn){
-  document.querySelectorAll('.chap').forEach(b=>b.classList.remove('on')); btn.classList.add('on');
-  S('bVersesArea').innerHTML=`<div class="bv-box"><div class="bv-title">${selBook.n} ${n}</div><div style="text-align:center;padding:40px;color:var(--gray)">⏳ Carregando...</div></div>`;
+
+// ── Book select ──
+function selectBook(name) {
+  selBook = BOOKS.find(function(b){ return b.n === name; });
+  selChap = 0;
+  renderBBooks();
+  var area = document.getElementById('bChapsArea');
+  if (area) area.style.display = 'block';
+  var title = document.getElementById('bBookTitle');
+  if (title) title.innerHTML = '<div class="stitle-bar"></div><h2 style="font-family:\'Cinzel\',serif">📖 ' + selBook.n + '</h2>';
+  var chapsEl = document.getElementById('bChaps');
+  if (chapsEl) {
+    var h = '';
+    for (var i = 1; i <= selBook.c; i++) {
+      h += '<button class="chap" onclick="selectChap(' + i + ',this)">' + i + '</button>';
+    }
+    chapsEl.innerHTML = h;
+  }
+  var versesArea = document.getElementById('bVersesArea');
+  if (versesArea) versesArea.innerHTML = '<p style="color:var(--gray);padding:20px 0;font-size:0.9rem;text-align:center">👆 Selecione um capítulo acima</p>';
+  if (area) area.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ── Chapter select ──
+function selectChap(n, btn) {
+  selChap = n;
+  document.querySelectorAll('.chap').forEach(function(b){ b.classList.remove('on'); });
+  if (btn) btn.classList.add('on');
+  var area = document.getElementById('bVersesArea');
+  if (area) area.innerHTML = '<div class="bv-box"><div class="bv-loading"><div class="bv-spinner"></div><div>A carregar ' + selBook.n + ' ' + n + '...</div></div></div>';
   loadChap(n);
 }
-async function loadChap(n){
-  try{
-    const res=await fetch(`https://bible-api.com/${BAPI[selBook.n]||selBook.n}+${n}?translation=almeida`);
-    if(!res.ok)throw new Error();
-    const data=await res.json();
-    let h=`<div class="bv-box"><div class="bv-title">${selBook.n} ${n}</div>`;
-    data.verses.forEach(v=>{h+=`<div class="bv" onclick="this.classList.toggle('hl')" title="Clique para destacar"><span class="bvn">${v.verse}</span>${v.text.trim()}</div>`;});
-    h+=`<hr style="border-color:var(--border);margin:18px 0"><p style="color:var(--gray);font-size:0.76rem">✝ Clique num versículo para destacar · Almeida</p></div>`;
-    S('bVersesArea').innerHTML=h;
-  }catch(e){S('bVersesArea').innerHTML=`<div class="bv-box"><div class="bv-title">${selBook.n} ${n}</div><p style="color:#ff6060">❌ Sem internet. Tente novamente.</p><button class="btn-o" style="margin-top:14px;padding:10px 20px;font-size:0.85rem" onclick="loadChap(${n})">Tentar novamente</button></div>`;}
+
+// ── Load chapter (with cache) ──
+function loadChap(n) {
+  if (!selBook) return;
+  var key = selBook.n + '_' + n;
+
+  // Restore from localStorage cache first
+  if (!bChapCache[key]) {
+    var cached = localStorage.getItem('j7_bc_' + key);
+    if (cached) {
+      try { bChapCache[key] = JSON.parse(cached); } catch(e) {}
+    }
+  }
+
+  if (bChapCache[key]) {
+    renderChap(selBook.n, n, bChapCache[key]);
+    return;
+  }
+
+  // Fetch from API
+  var apiName = BAPI[selBook.n] || selBook.n.toLowerCase().replace(/ /g,'');
+  var url = 'https://bible-api.com/' + apiName + '+' + n + '?translation=almeida';
+
+  fetch(url).then(function(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }).then(function(data) {
+    var verses = data.verses || [];
+    bChapCache[key] = verses;
+    // Cache in localStorage (trim if too big)
+    try { localStorage.setItem('j7_bc_' + key, JSON.stringify(verses)); } catch(e) {}
+    renderChap(selBook.n, n, verses);
+    // Save to history
+    addBHistory(selBook.n, n);
+  }).catch(function(err) {
+    var area = document.getElementById('bVersesArea');
+    if (!area) return;
+    area.innerHTML =
+      '<div class="bv-box">'
+      + '<div class="bv-title">' + selBook.n + ' ' + n + '</div>'
+      + '<div style="text-align:center;padding:32px">'
+      + '<div style="font-size:3rem;margin-bottom:12px">📵</div>'
+      + '<div style="color:#ff8080;font-weight:600;margin-bottom:8px">Sem ligação à internet</div>'
+      + '<div style="color:#7a8eb0;font-size:0.85rem;margin-bottom:20px">Conecta-te para carregar este capítulo.<br>Capítulos já lidos ficam guardados offline.</div>'
+      + '<button class="btn-g" onclick="loadChap(' + n + ')" style="padding:10px 24px;font-size:0.9rem">🔄 Tentar novamente</button>'
+      + '</div></div>';
+  });
 }
-function showBTab(tab,btn){['livros','buscar','vdia'].forEach(t=>{const e=S('btab-'+t);if(e)e.style.display='none';});document.querySelectorAll('#view-biblia .stab').forEach(b=>b.classList.remove('active'));S('btab-'+tab).style.display='block';btn.classList.add('active');if(tab==='vdia')initBible();}
-function searchBible(){
-  const q=S('bSearchIn').value.trim().toLowerCase(); if(!q)return;
-  let found=[];
-  VDIA.forEach(v=>{if(v.t.toLowerCase().includes(q))found.push(v);});
-  const extra=[{r:'Salmos 27:1',t:'O SENHOR é a minha luz e a minha salvação; a quem temerei?'},{r:'Efésios 2:8',t:'Porque pela graça sois salvos, por meio da fé; e isto não vem de vós; é dom de Deus.'},{r:'2 Timóteo 1:7',t:'Porque Deus não nos deu o espírito de covardia, mas de poder, de amor e de moderação.'},{r:'1 João 4:8',t:'Quem não ama não conhece a Deus; porque Deus é amor.'},{r:'Salmos 46:1',t:'Deus é o nosso refúgio e força, socorro bem presente na angústia.'},{r:'Hebreus 11:1',t:'Ora, a fé é o firme fundamento das coisas que se esperam e a prova das coisas que não se vêem.'},{r:'Salmos 23:1',t:'O SENHOR é o meu pastor; nada me faltará.'}];
-  extra.forEach(v=>{if(v.t.toLowerCase().includes(q)&&!found.find(f=>f.r===v.r))found.push(v);});
-  S('bSearchRes').innerHTML=found.length?`<div class="bsr"><p style="color:var(--gray);margin-bottom:12px;font-size:0.82rem">${found.length} resultado(s) para "${q}"</p>${found.map(v=>`<div class="bsr-item"><div class="bsr-ref">📖 ${v.r}</div><div class="bsr-txt">${v.t.replace(new RegExp(q,'gi'),m=>`<mark>${m}</mark>`)}</div></div>`).join('')}</div>`:`<div class="bsr"><p style="color:var(--gray)">Sem resultados para "${q}". Tente: amor, fé, paz, esperança, graça...</p></div>`;
+
+// ── Render chapter verses ──
+function renderChap(bookName, n, verses) {
+  var area = document.getElementById('bVersesArea');
+  if (!area) return;
+
+  var book = BOOKS.find(function(b){ return b.n === bookName; });
+  var prevChap = n > 1 ? n - 1 : 0;
+  var nextChap = book && n < book.c ? n + 1 : 0;
+
+  var html = '<div class="bv-box">'
+    // Header
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">'
+    + '<div class="bv-title" style="margin-bottom:0">' + bookName + ' ' + n + '</div>'
+    + '<div style="display:flex;align-items:center;gap:8px">'
+    + '<button onclick="changeBFont(-2)" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:7px;color:#eef2ff;width:32px;height:32px;cursor:pointer;font-size:1rem;line-height:1">A-</button>'
+    + '<button onclick="changeBFont(2)"  style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:7px;color:#eef2ff;width:32px;height:32px;cursor:pointer;font-size:1.1rem;font-weight:700;line-height:1">A+</button>'
+    + '</div>'
+    + '</div>';
+
+  // Verses
+  html += '<div id="bVersesContent" style="font-size:' + bFontSize + 'px">';
+  verses.forEach(function(v) {
+    var ref = bookName + ' ' + n + ':' + v.verse;
+    var safeText = v.text.trim().replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    html += '<div class="bv" id="bv-' + v.verse + '">'
+      + '<span class="bvn">' + v.verse + '</span>'
+      + '<span class="bv-text">' + v.text.trim() + '</span>'
+      + '<div class="bv-actions">'
+      + '<button onclick="toggleBvHl(this.parentElement.parentElement)" title="Destacar" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:4px">🔆</button>'
+      + '<button onclick="addBFav(\'' + ref + '\',\'' + safeText + '\')" title="Favoritar" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:4px">❤️</button>'
+      + '<button onclick="shareVerse(\'' + ref + '\',\'' + safeText + '\')" title="Partilhar" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:4px">📤</button>'
+      + '<button onclick="copyVerse(\'' + ref + '\',\'' + safeText + '\')" title="Copiar" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:4px">📋</button>'
+      + '</div>'
+      + '</div>';
+  });
+  html += '</div>';
+
+  // Navigation
+  html += '<div style="display:flex;gap:12px;margin-top:28px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.07);justify-content:space-between;align-items:center">';
+  if (prevChap) {
+    html += '<button class="btn-o" onclick="selectChapNav(' + prevChap + ')" style="padding:10px 20px;font-size:0.88rem">◀ Cap. ' + prevChap + '</button>';
+  } else {
+    html += '<div></div>';
+  }
+  html += '<div style="font-size:0.75rem;color:#7a8eb0;text-align:center">' + bookName + ' · ' + n + '/' + (book ? book.c : '?') + '</div>';
+  if (nextChap) {
+    html += '<button class="btn-g" onclick="selectChapNav(' + nextChap + ')" style="padding:10px 20px;font-size:0.88rem">Cap. ' + nextChap + ' ▶</button>';
+  } else {
+    html += '<div></div>';
+  }
+  html += '</div>';
+
+  html += '<div style="margin-top:16px;font-size:0.72rem;color:#7a8eb0;text-align:center">✝ Bíblia Almeida Revista e Corrigida (ARC) · Clique ❤️ para favoritar · 🔆 para destacar</div>';
+  html += '</div>';
+
+  area.innerHTML = html;
+  area.scrollIntoView({behavior:'smooth', block:'start'});
 }
+
+// Navigate to chapter without needing a button reference
+function selectChapNav(n) {
+  selChap = n;
+  document.querySelectorAll('.chap').forEach(function(b){
+    b.classList.toggle('on', parseInt(b.textContent) === n);
+  });
+  var area = document.getElementById('bVersesArea');
+  if (area) area.innerHTML = '<div class="bv-box"><div class="bv-loading"><div class="bv-spinner"></div><div>A carregar capítulo ' + n + '...</div></div></div>';
+  loadChap(n);
+}
+
+// ── Verse actions ──
+function toggleBvHl(el) {
+  if (el) el.classList.toggle('hl');
+}
+
+function addBFav(ref, text) {
+  var decoded = text.replace(/&quot;/g, '"').replace(/\\'/g, "'");
+  if (bFavs.find(function(f){ return f.r === ref; })) {
+    toast('Já está nos favoritos!');
+    return;
+  }
+  bFavs.unshift({r: ref, t: decoded, ts: Date.now()});
+  if (bFavs.length > 100) bFavs = bFavs.slice(0, 100);
+  saveBFavs();
+  toast('❤️ Versículo guardado nos favoritos!');
+}
+
+function shareVerse(ref, text) {
+  var decoded = text.replace(/&quot;/g, '"').replace(/\\'/g, "'");
+  var msg = '📖 ' + ref + '\n\n"' + decoded + '"\n\n✝ Louvor J7MSC · Bíblia ARC';
+  if (navigator.share) {
+    navigator.share({title: ref, text: msg}).catch(function(){});
+  } else {
+    navigator.clipboard && navigator.clipboard.writeText(msg);
+    toast('📋 Versículo copiado!');
+  }
+}
+
+function copyVerse(ref, text) {
+  var decoded = text.replace(/&quot;/g, '"').replace(/\\'/g, "'");
+  var msg = '"' + decoded + '" — ' + ref + ' (ARC)';
+  navigator.clipboard && navigator.clipboard.writeText(msg);
+  toast('📋 Copiado: ' + ref);
+}
+
+function changeBFont(delta) {
+  bFontSize = Math.max(14, Math.min(28, bFontSize + delta));
+  localStorage.setItem('j7_bfont', bFontSize);
+  var el = document.getElementById('bVersesContent');
+  if (el) el.style.fontSize = bFontSize + 'px';
+}
+
+// ── History ──
+function addBHistory(book, chap) {
+  var entry = {b: book, c: chap, ts: Date.now()};
+  bHistory = bHistory.filter(function(h){ return !(h.b === book && h.c === chap); });
+  bHistory.unshift(entry);
+  if (bHistory.length > 10) bHistory = bHistory.slice(0, 10);
+  saveBHist();
+}
+
+// ── Bible sub-tabs ──
+function showBTab(tab, btn) {
+  ['livros','buscar','vdia','favs','hist'].forEach(function(t) {
+    var e = document.getElementById('btab-' + t);
+    if (e) e.style.display = 'none';
+  });
+  document.querySelectorAll('#view-biblia .stab').forEach(function(b){ b.classList.remove('active'); });
+  var el = document.getElementById('btab-' + tab);
+  if (el) el.style.display = 'block';
+  if (btn) btn.classList.add('active');
+  if (tab === 'vdia') renderVDia();
+  if (tab === 'favs') renderBFavs();
+  if (tab === 'hist') renderBHist();
+}
+
+// ── Favourites tab ──
+function renderBFavs() {
+  var el = document.getElementById('btab-favs');
+  if (!el) return;
+  if (!bFavs.length) {
+    el.innerHTML = '<div style="text-align:center;padding:48px 20px;color:#7a8eb0"><div style="font-size:3rem;margin-bottom:12px">❤️</div><div>Nenhum versículo favorito ainda.</div><div style="font-size:0.82rem;margin-top:8px">Clique ❤️ num versículo para guardar.</div></div>';
+    return;
+  }
+  el.innerHTML = '<div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center"><span style="color:#7a8eb0;font-size:0.85rem">' + bFavs.length + ' versículo(s) guardado(s)</span><button onclick="clearBFavs()" style="background:none;border:none;color:#ff8080;cursor:pointer;font-size:0.8rem;font-family:\'Outfit\',sans-serif">🗑 Limpar tudo</button></div>'
+    + bFavs.map(function(v, i) {
+      return '<div class="bv-box" style="margin-bottom:12px;padding:16px">'
+        + '<div style="font-weight:700;color:#e8ab18;font-family:\'Cinzel\',serif;font-size:0.9rem;margin-bottom:8px">📖 ' + v.r + '</div>'
+        + '<div style="color:#eef2ff;line-height:1.8;font-size:0.92rem">"' + v.t + '"</div>'
+        + '<div style="display:flex;gap:8px;margin-top:12px">'
+        + '<button onclick="shareVerse(\'' + v.r.replace(/'/g,"\\'") + '\',\'' + v.t.replace(/'/g,"\\'").slice(0,150) + '\')" style="background:rgba(200,146,10,0.12);border:1px solid rgba(200,146,10,0.25);border-radius:7px;color:#e8ab18;padding:6px 14px;cursor:pointer;font-size:0.78rem;font-family:\'Outfit\',sans-serif">📤 Partilhar</button>'
+        + '<button onclick="removeBFav(' + i + ')" style="background:rgba(181,30,36,0.1);border:1px solid rgba(181,30,36,0.25);border-radius:7px;color:#ff8080;padding:6px 14px;cursor:pointer;font-size:0.78rem;font-family:\'Outfit\',sans-serif">🗑 Remover</button>'
+        + '</div></div>';
+    }).join('');
+}
+
+function removeBFav(i) {
+  bFavs.splice(i, 1);
+  saveBFavs();
+  renderBFavs();
+  toast('Favorito removido.');
+}
+
+function clearBFavs() {
+  if (!confirm('Limpar todos os favoritos da Bíblia?')) return;
+  bFavs = []; saveBFavs(); renderBFavs();
+}
+
+// ── History tab ──
+function renderBHist() {
+  var el = document.getElementById('btab-hist');
+  if (!el) return;
+  if (!bHistory.length) {
+    el.innerHTML = '<div style="text-align:center;padding:48px 20px;color:#7a8eb0"><div style="font-size:3rem;margin-bottom:12px">🕐</div><div>Nenhum capítulo lido ainda.</div></div>';
+    return;
+  }
+  el.innerHTML = '<div style="margin-bottom:14px;color:#7a8eb0;font-size:0.85rem">Últimos capítulos lidos:</div>'
+    + bHistory.map(function(h) {
+      return '<button onclick="selectBook(\'' + h.b.replace(/'/g,"\\'") + '\');setTimeout(function(){selectChapNav(' + h.c + ')},300)" style="display:block;width:100%;text-align:left;background:rgba(11,24,48,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px 18px;margin-bottom:8px;cursor:pointer;color:#eef2ff;font-family:\'Outfit\',sans-serif;font-size:0.9rem">'
+        + '📖 <strong>' + h.b + ' ' + h.c + '</strong>'
+        + '<span style="color:#7a8eb0;font-size:0.75rem;float:right">' + new Date(h.ts).toLocaleDateString('pt-BR') + '</span>'
+        + '</button>';
+    }).join('');
+}
+
+// ── Search ──
+function searchBible() {
+  var input = document.getElementById('bSearchIn');
+  var q = input ? input.value.trim() : '';
+  if (!q) return;
+
+  var res = document.getElementById('bSearchRes');
+  if (!res) return;
+  res.innerHTML = '<div style="text-align:center;padding:24px;color:#7a8eb0"><div class="bv-spinner" style="margin:0 auto 10px"></div>A buscar...</div>';
+
+  // 1. Try to parse as reference: "João 3:16" or "João 3"
+  var refMatch = q.match(/^(.+?)\s+(\d+)(?::(\d+))?$/);
+  if (refMatch) {
+    var bookQ  = refMatch[1].trim();
+    var chapQ  = parseInt(refMatch[2]);
+    var verseQ = refMatch[3] ? parseInt(refMatch[3]) : null;
+
+    var foundBook = BOOKS.find(function(b){
+      return b.n.toLowerCase() === bookQ.toLowerCase() ||
+             b.n.toLowerCase().startsWith(bookQ.toLowerCase());
+    });
+
+    if (foundBook) {
+      var apiName = BAPI[foundBook.n];
+      var url = 'https://bible-api.com/' + apiName + '+' + chapQ + (verseQ ? ':' + verseQ : '') + '?translation=almeida';
+      fetch(url).then(function(r){ return r.json(); }).then(function(data) {
+        var verses = data.verses || [];
+        if (!verses.length && data.text) {
+          // Single verse response
+          verses = [{verse: verseQ || 1, text: data.text}];
+        }
+        showSearchResults(q, foundBook.n, chapQ, verses, verseQ);
+      }).catch(function() {
+        // Fallback to local search
+        localSearchBible(q, res);
+      });
+      return;
+    }
+  }
+
+  // 2. Keyword search in local VDIA + favs
+  localSearchBible(q, res);
+}
+
+function showSearchResults(q, bookName, chap, verses, highlightVerse) {
+  var res = document.getElementById('bSearchRes');
+  if (!res) return;
+  if (!verses.length) {
+    res.innerHTML = '<div class="bsr"><p style="color:#7a8eb0">Referência não encontrada. Verifica a ortografia.</p></div>';
+    return;
+  }
+  var html = '<div class="bsr">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">'
+    + '<div style="color:#7a8eb0;font-size:0.82rem">📖 ' + bookName + ' ' + chap + ' · ' + verses.length + ' versículo(s)</div>'
+    + '<button onclick="selectBook(\'' + bookName.replace(/'/g,"\\'") + '\');setTimeout(function(){selectChapNav(' + chap + ')},300);showBTab(\'livros\',document.querySelector(\'#view-biblia .stab\'))" class="btn-g" style="padding:7px 16px;font-size:0.8rem">📖 Abrir capítulo</button>'
+    + '</div>';
+
+  verses.forEach(function(v) {
+    var hl = highlightVerse && v.verse == highlightVerse;
+    var ref = bookName + ' ' + chap + ':' + v.verse;
+    html += '<div class="bv' + (hl ? ' hl' : '') + '">'
+      + '<span class="bvn">' + v.verse + '</span>'
+      + '<span class="bv-text">' + v.text.trim() + '</span>'
+      + '<div class="bv-actions">'
+      + '<button onclick="addBFav(\'' + ref + '\',\'' + v.text.trim().replace(/'/g,"\\'") + '\')" style="background:none;border:none;cursor:pointer;font-size:0.9rem;padding:4px">❤️</button>'
+      + '<button onclick="shareVerse(\'' + ref + '\',\'' + v.text.trim().replace(/'/g,"\\'") + '\')" style="background:none;border:none;cursor:pointer;font-size:0.9rem;padding:4px">📤</button>'
+      + '</div></div>';
+  });
+  html += '</div>';
+  res.innerHTML = html;
+}
+
+function localSearchBible(q, res) {
+  var ql = q.toLowerCase();
+  var found = [];
+
+  // Search VDIA
+  VDIA.forEach(function(v) {
+    if (v.t.toLowerCase().includes(ql) || v.r.toLowerCase().includes(ql)) {
+      found.push(v);
+    }
+  });
+
+  // Search cached chapters in localStorage
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (key && key.startsWith('j7_bc_') && found.length < 30) {
+        var data = JSON.parse(localStorage.getItem(key) || '[]');
+        var parts = key.replace('j7_bc_','').split('_');
+        var bookName = parts.slice(0,-1).join('_');
+        var chapN = parts[parts.length-1];
+        data.forEach(function(v) {
+          if (v.text && v.text.toLowerCase().includes(ql)) {
+            found.push({r: bookName + ' ' + chapN + ':' + v.verse, t: v.text.trim()});
+          }
+        });
+      }
+    }
+  } catch(e) {}
+
+  // Search bFavs
+  bFavs.forEach(function(v) {
+    if ((v.t.toLowerCase().includes(ql) || v.r.toLowerCase().includes(ql)) && !found.find(function(f){ return f.r === v.r; })) {
+      found.push(v);
+    }
+  });
+
+  if (!res) return;
+  if (!found.length) {
+    res.innerHTML = '<div class="bsr">'
+      + '<p style="color:#7a8eb0;margin-bottom:16px">Nenhum resultado local para "' + q + '".</p>'
+      + '<div style="background:rgba(11,24,48,0.5);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:16px">'
+      + '<div style="font-size:0.82rem;color:#7a8eb0;margin-bottom:12px">💡 Para buscar em toda a Bíblia, usa a referência directamente:</div>'
+      + '<div style="display:flex;flex-direction:column;gap:8px">'
+      + ['João 3:16','Salmos 23','Romanos 8:28','Filipenses 4:13','Mateus 5'].map(function(ex){
+        return '<button onclick="document.getElementById(\'bSearchIn\').value=\'' + ex + '\';searchBible()" style="background:rgba(200,146,10,0.1);border:1px solid rgba(200,146,10,0.2);border-radius:8px;color:#e8ab18;padding:8px 14px;cursor:pointer;font-family:\'Outfit\',sans-serif;font-size:0.83rem;text-align:left">📖 ' + ex + '</button>';
+      }).join('')
+      + '</div></div></div>';
+    return;
+  }
+
+  res.innerHTML = '<div class="bsr">'
+    + '<p style="color:#7a8eb0;margin-bottom:12px;font-size:0.82rem">' + found.length + ' resultado(s) para "' + q + '"</p>'
+    + found.map(function(v) {
+      var highlighted = v.t.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'), function(m){ return '<mark>' + m + '</mark>'; });
+      return '<div class="bsr-item">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+        + '<div class="bsr-ref">📖 ' + v.r + '</div>'
+        + '<button onclick="addBFav(\'' + v.r.replace(/'/g,"\\'") + '\',\'' + v.t.replace(/'/g,"\\'").slice(0,200) + '\')" style="background:none;border:none;cursor:pointer;font-size:0.85rem;padding:2px">❤️</button>'
+        + '</div>'
+        + '<div class="bsr-txt">' + highlighted + '</div>'
+        + '</div>';
+    }).join('')
+    + '</div>';
+}
+
 
 // ─── INIT ───
 // [splash logo set after LOGOS — see LOGOS block]
@@ -2674,6 +3357,139 @@ function renderSongVideoTab(song) {
 // ════════════════════════
 
 
+
+
+// ════════════════════════════════════════════
+// INSTALL BUTTON & MODAL
+// ════════════════════════════════════════════
+
+// Show float button always (with instructions for all devices)
+window.addEventListener('load', function() {
+  // Always show the button after 2 seconds
+  setTimeout(function() {
+    var btn = document.getElementById('floatInstallBtn');
+    if (btn) btn.style.display = 'flex';
+  }, 2000);
+
+  // If deferredPrompt available → show direct install button inside modal
+  // (handled in beforeinstallprompt listener below)
+
+  // Detect OS and pre-select correct tab
+  var ua = navigator.userAgent.toLowerCase();
+  var isIOS     = /iphone|ipad|ipod/.test(ua);
+  var isAndroid = /android/.test(ua);
+  var isMac     = /mac/.test(ua) && !isIOS;
+
+  window._installOS = isIOS ? 'ios' : isAndroid ? 'android' : 'pc';
+});
+
+// Capture install prompt (Android Chrome)
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  deferredPrompt = e;
+  // Show direct install button inside modal
+  var directBtn = document.getElementById('installDirectBtn');
+  if (directBtn) directBtn.style.display = 'block';
+  // Update float button icon to show it's ready
+  var icon = document.getElementById('fibIcon');
+  if (icon) icon.textContent = '⬇';
+});
+
+// App installed → hide float button
+window.addEventListener('appinstalled', function() {
+  var btn = document.getElementById('floatInstallBtn');
+  if (btn) btn.style.display = 'none';
+  toast('🎉 App instalado com sucesso!');
+  localStorage.setItem('j7_installed', '1');
+});
+
+// Hide if already installed
+if (localStorage.getItem('j7_installed') === '1' ||
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true) {
+  // Running as installed PWA — hide button
+  window.addEventListener('load', function() {
+    var btn = document.getElementById('floatInstallBtn');
+    if (btn) btn.style.display = 'none';
+  });
+}
+
+function openInstallModal() {
+  var modal = document.getElementById('installModal');
+  if (!modal) return;
+  modal.classList.add('on');
+  // Auto-select correct OS tab
+  var os = window._installOS || 'android';
+  var tabs = document.querySelectorAll('.install-os-tab');
+  tabs.forEach(function(t){ t.classList.remove('active'); });
+  var tabMap = {'android':0,'ios':1,'pc':2};
+  var idx = tabMap[os] || 0;
+  if (tabs[idx]) tabs[idx].classList.add('active');
+  showInstallOS(os, null);
+  // Show current URL in the link box
+  var linkBox = document.getElementById('installLinkBox');
+  if (linkBox) linkBox.textContent = window.location.href.split('?')[0];
+}
+
+function closeInstallModal() {
+  var modal = document.getElementById('installModal');
+  if (modal) modal.classList.remove('on');
+}
+
+function showInstallOS(os, btn) {
+  ['android','ios','pc'].forEach(function(o) {
+    var el = document.getElementById('installOS-' + o);
+    if (el) el.style.display = o === os ? 'block' : 'none';
+  });
+  if (btn) {
+    document.querySelectorAll('.install-os-tab').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+  }
+}
+
+function triggerInstall() {
+  if (!deferredPrompt) {
+    toast('Use o menu do browser → "Adicionar ao ecrã inicial"');
+    return;
+  }
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(function(result) {
+    if (result.outcome === 'accepted') {
+      toast('🎉 A instalar...');
+      closeInstallModal();
+      localStorage.setItem('j7_installed', '1');
+    }
+    deferredPrompt = null;
+  });
+}
+
+function copyInstallLink() {
+  var link = window.location.href.split('?')[0];
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(link).then(function() {
+      toast('📋 Link copiado! Partilha com a congregação.');
+    });
+  } else {
+    toast('Link: ' + link);
+  }
+}
+
+function shareInstallLink() {
+  var link = window.location.href.split('?')[0];
+  var msg = '📱 Instala o Louvor J7MSC!\n\nApp de músicas da Missão Sul de Luanda · IASD\n\n' + link + '\n\nGrátis · Funciona offline · Android, iPhone e PC';
+  if (navigator.share) {
+    navigator.share({title: 'Louvor J7MSC', text: msg, url: link}).catch(function(){});
+  } else {
+    navigator.clipboard && navigator.clipboard.writeText(msg);
+    toast('📋 Mensagem copiada para partilhar!');
+  }
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeInstallModal();
+});
+
 </script>
 
 <!-- ═══ MINI PLAYER (fixed bottom bar) ═══ -->
@@ -2703,6 +3519,113 @@ function renderSongVideoTab(song) {
   </div>
 </div>
 <audio id="globalAudio"></audio>
+
+
+<!-- ══ Floating Install Button ══ -->
+<div id="floatInstallBtn" onclick="openInstallModal()">
+  <div class="fib-btn">
+    <span id="fibIcon">📲</span>
+    <div class="fib-badge">↓</div>
+  </div>
+  <div class="fib-label">INSTALAR APP</div>
+</div>
+
+<!-- ══ Install Instructions Modal ══ -->
+<div id="installModal" onclick="if(event.target===this)closeInstallModal()">
+  <div id="installModalBox">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div>
+        <div style="font-family:'Cinzel',serif;font-size:1.15rem;font-weight:700;color:#e8ab18">📲 Instalar Louvor J7MSC</div>
+        <div style="font-size:0.78rem;color:#7a8eb0;margin-top:3px">Grátis · Funciona offline · Como app nativa</div>
+      </div>
+      <button onclick="closeInstallModal()" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:50%;width:34px;height:34px;cursor:pointer;color:#eef2ff;font-size:1rem;display:flex;align-items:center;justify-content:center">✕</button>
+    </div>
+
+    <!-- OS Selector -->
+    <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap" id="installOSTabs">
+      <button class="install-os-tab active" onclick="showInstallOS('android',this)">🤖 Android</button>
+      <button class="install-os-tab" onclick="showInstallOS('ios',this)">🍎 iPhone/iPad</button>
+      <button class="install-os-tab" onclick="showInstallOS('pc',this)">💻 Computador</button>
+    </div>
+
+    <!-- Android Steps -->
+    <div id="installOS-android">
+      <div id="installDirectBtn" style="display:none;margin-bottom:16px">
+        <button onclick="triggerInstall()" style="width:100%;background:linear-gradient(135deg,#c8920a,#e8ab18);border:none;border-radius:14px;color:#060e1f;font-family:'Cinzel',serif;font-size:1rem;font-weight:800;padding:16px;cursor:pointer;letter-spacing:.04em">
+          ⬇ INSTALAR AGORA
+        </button>
+        <div style="text-align:center;color:#7a8eb0;font-size:0.75rem;margin-top:8px">Toque para instalar directamente</div>
+      </div>
+      <div class="install-step">
+        <div class="install-step-num">1</div>
+        <div class="install-step-text">Abre este link no <strong>Google Chrome</strong> no teu Android</div>
+      </div>
+      <div class="install-step">
+        <div class="install-step-num">2</div>
+        <div class="install-step-text">Toca nos <strong>3 pontos ⋮</strong> no canto superior direito do Chrome</div>
+      </div>
+      <div class="install-step">
+        <div class="install-step-num">3</div>
+        <div class="install-step-text">Selecciona <strong>"Adicionar ao ecrã inicial"</strong> ou <strong>"Instalar app"</strong></div>
+      </div>
+      <div class="install-step">
+        <div class="install-step-num">4</div>
+        <div class="install-step-text">Confirma tocando em <strong>"Instalar"</strong> — o ícone aparece no ecrã ✅</div>
+      </div>
+    </div>
+
+    <!-- iOS Steps -->
+    <div id="installOS-ios" style="display:none">
+      <div class="install-step">
+        <div class="install-step-num">1</div>
+        <div class="install-step-text">Abre este link no <strong>Safari</strong> (obrigatório no iPhone/iPad)</div>
+      </div>
+      <div class="install-step">
+        <div class="install-step-num">2</div>
+        <div class="install-step-text">Toca no botão <strong>Partilhar ↑</strong> na barra inferior do Safari</div>
+      </div>
+      <div class="install-step">
+        <div class="install-step-num">3</div>
+        <div class="install-step-text">Desliza para baixo e toca em <strong>"Adicionar ao ecrã de início"</strong></div>
+      </div>
+      <div class="install-step">
+        <div class="install-step-num">4</div>
+        <div class="install-step-text">Toca em <strong>"Adicionar"</strong> no canto superior direito ✅</div>
+      </div>
+    </div>
+
+    <!-- PC Steps -->
+    <div id="installOS-pc" style="display:none">
+      <div class="install-step">
+        <div class="install-step-num">1</div>
+        <div class="install-step-text">Abre o link no <strong>Google Chrome</strong> ou <strong>Microsoft Edge</strong></div>
+      </div>
+      <div class="install-step">
+        <div class="install-step-num">2</div>
+        <div class="install-step-text">Clica no ícone <strong>⊕ Instalar</strong> que aparece na barra de endereço (lado direito)</div>
+      </div>
+      <div class="install-step">
+        <div class="install-step-num">3</div>
+        <div class="install-step-text">Clica em <strong>"Instalar"</strong> na janela que abre — a app abre sozinha ✅</div>
+      </div>
+      <div class="install-step" style="border:none;background:rgba(200,146,10,0.08);border-radius:10px;padding:12px 14px;margin-top:8px">
+        <div class="install-step-num">💡</div>
+        <div class="install-step-text" style="font-size:0.82rem">No <strong>Firefox</strong>: não suporta instalação PWA. Usa Chrome ou Edge.</div>
+      </div>
+    </div>
+
+    <!-- Share link -->
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.07)">
+      <div style="font-size:0.75rem;color:#7a8eb0;margin-bottom:8px">🔗 Link para partilhar com a congregação:</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="installLinkBox" style="flex:1;background:rgba(11,24,48,0.7);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 14px;font-size:0.8rem;color:#e8ab18;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">https://louvor-j7-msc.vercel.app</div>
+        <button onclick="copyInstallLink()" style="background:rgba(200,146,10,0.18);border:1px solid rgba(200,146,10,0.3);border-radius:8px;color:#e8ab18;padding:10px 14px;cursor:pointer;font-size:0.82rem;font-weight:700;font-family:'Outfit',sans-serif;white-space:nowrap">📋 Copiar</button>
+        <button onclick="shareInstallLink()" style="background:rgba(200,146,10,0.18);border:1px solid rgba(200,146,10,0.3);border-radius:8px;color:#e8ab18;padding:10px 14px;cursor:pointer;font-size:0.82rem;font-weight:700;font-family:'Outfit',sans-serif;white-space:nowrap">📤</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
