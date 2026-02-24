@@ -1,0 +1,72 @@
+══════════════════════════════════════════════════════
+  COMANDOS GIT — LOUVOR J7MSC
+  Cola estes comandos no Terminal do VS Code
+  um a um, por ordem
+══════════════════════════════════════════════════════
+
+PASSO 1 — Vai à pasta do projecto:
+────────────────────────────────────
+cd "C:\Users\afrancisco2\Downloads\Projecto APP"
+
+
+PASSO 2 — Força o branch main:
+────────────────────────────────────
+git checkout -B main
+
+
+PASSO 3 — Remove ficheiros antigos problemáticos:
+────────────────────────────────────
+git rm --cached -r . 2>nul
+git rm -f index.html.html 2>nul
+
+
+PASSO 4 — Copia os novos ficheiros para a pasta
+(faz isto manualmente no Explorador de Ficheiros):
+────────────────────────────────────
+  • LouvorJ7MSC.html  →  renomeia para  index.html
+  • sw.js             →  copia para a pasta
+  • vercel.json       →  copia para a pasta
+
+
+PASSO 5 — Adiciona todos os ficheiros:
+────────────────────────────────────
+git add .
+
+
+PASSO 6 — Verifica o que está a ser enviado:
+────────────────────────────────────
+git status
+
+
+PASSO 7 — Faz commit:
+────────────────────────────────────
+git commit -m "Actualizar app com imagens dos clubes"
+
+
+PASSO 8 — Envia para o GitHub (força se necessário):
+────────────────────────────────────
+git push origin main --force
+
+
+══════════════════════════════════════════════════════
+  DEPOIS NO VERCEL:
+══════════════════════════════════════════════════════
+
+1. Vai a https://vercel.com
+2. Clica "New Project"
+3. Importa: Ataidefrancisco/LouvorJ7MSC
+4. Framework: Other
+5. Clica "Deploy"
+
+O vercel.json agora tem apenas {"version":2}
+— sem erros garantido!
+
+══════════════════════════════════════════════════════
+  FICHEIROS NECESSÁRIOS NA PASTA (3 ficheiros):
+══════════════════════════════════════════════════════
+
+  index.html     ← o ficheiro principal da app
+  sw.js          ← service worker
+  vercel.json    ← configuração Vercel ({"version":2})
+
+══════════════════════════════════════════════════════
