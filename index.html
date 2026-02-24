@@ -3565,151 +3565,16 @@ document.addEventListener('keydown', function(e) {
 // Reprodução directa, fullscreen, controlos nativos
 // ════════════════════════════════════════════════════════════════
 
-var _ytPlayer      = null;   // YT.Player instance
-var _ytReady       = false;  // API loaded
-var _ytPendingId   = null;   // queued video to play
-var _ytCurrentSong = null;   // song being played
 
 // ── Load YouTube IFrame API once ──
-function loadYTApi() {
-  if (document.getElementById('yt-api-script')) return;
-  var tag = document.createElement('script');
-  tag.id  = 'yt-api-script';
-  tag.src = 'https://www.youtube.com/iframe_api';
-  document.head.appendChild(tag);
-}
-
-// Called automatically by YouTube when API is ready
-window.onYouTubeIframeAPIReady = function() {
-  _ytReady = true;
-  if (_ytPendingId) {
-    var pending = _ytPendingId;
-    _ytPendingId = null;
-    setTimeout(function(){ playYouTube(pending); }, 100);
-  }
-};
 
 // ── Main function: play a YouTube video in the song view ──
-function playYouTube(videoId) {
-  if (!videoId) return;
-
-  // Ensure API is loaded
-  if (!_ytReady) {
-    _ytPendingId = videoId;
-    loadYTApi();
-    return;
-  }
-
-  var container = document.getElementById('yt-player-container');
-  if (!container) return;
-
-  // Show the player container
-  container.style.display = 'block';
-
-  // Scroll to player
-  container.scrollIntoView({behavior: 'smooth', block: 'center'});
-
-  if (_ytPlayer) {
-    // Reuse existing player — just load new video
-    _ytPlayer.loadVideoById(videoId);
-    _ytPlayer.playVideo();
-    return;
-  }
-
-  // Create player div
-  var playerDiv = document.getElementById('yt-player-div');
-  if (!playerDiv) {
-    playerDiv = document.createElement('div');
-    playerDiv.id = 'yt-player-div';
-    container.appendChild(playerDiv);
-  }
-
-  // Create YT.Player
-  _ytPlayer = new YT.Player('yt-player-div', {
-    height: '100%',
-    width:  '100%',
-    videoId: videoId,
-    playerVars: {
-      autoplay:       1,
-      controls:       1,
-      rel:            0,
-      modestbranding: 1,
-      playsinline:    1,
-      fs:             1,
-      cc_load_policy: 0,
-      iv_load_policy: 3,
-      origin:         window.location.origin || 'https://louvorj7msc.vercel.app'
-    },
-    events: {
-      onReady: function(e) {
-        e.target.playVideo();
-        updateYTMiniBar('playing');
-      },
-      onStateChange: function(e) {
-        if (e.data === YT.PlayerState.PLAYING)  updateYTMiniBar('playing');
-        if (e.data === YT.PlayerState.PAUSED)   updateYTMiniBar('paused');
-        if (e.data === YT.PlayerState.ENDED)    updateYTMiniBar('ended');
-      },
-      onError: function(e) {
-        var codes = {2:'ID inválido',5:'HTML5 error',100:'Vídeo não encontrado',101:'Reprodução bloqueada',150:'Reprodução bloqueada'};
-        var msg = codes[e.data] || 'Erro ' + e.data;
-        showYTError(msg);
-      }
-    }
-  });
-}
 
 // ── Show error message in player ──
-function showYTError(msg) {
-  var container = document.getElementById('yt-player-container');
-  if (!container) return;
-  container.innerHTML =
-    '<div style="background:rgba(181,30,36,0.15);border:1px solid rgba(181,30,36,0.3);border-radius:12px;padding:24px;text-align:center">'
-    + '<div style="font-size:2.5rem;margin-bottom:10px">⚠️</div>'
-    + '<div style="color:#ff8080;font-weight:600;margin-bottom:8px">' + msg + '</div>'
-    + '<div style="color:#7a8eb0;font-size:0.82rem;margin-bottom:16px">Tenta abrir directamente no YouTube</div>'
-    + '<button onclick="openYTExternal()" class="btn-g" style="padding:10px 22px">▶ Abrir no YouTube</button>'
-    + '</div>';
-}
 
 // ── Open in YouTube app/browser ──
-function openYTExternal() {
-  if (_ytCurrentSong && _ytCurrentSong.youtube) {
-    window.open('https://www.youtube.com/watch?v=' + _ytCurrentSong.youtube, '_blank');
-  }
-}
 
 // ── Mini bar update ──
-function updateYTMiniBar(state) {
-  var bar = document.getElementById('ytMiniBar');
-  if (!bar || !_ytCurrentSong) return;
-  var icons = {playing: '▶️', paused: '⏸', ended: '⏹'};
-  bar.innerHTML =
-    '<div style="display:flex;align-items:center;gap:10px;padding:8px 16px;background:rgba(181,30,36,0.15);border-top:1px solid rgba(181,30,36,0.2)">'
-    + '<span style="font-size:1rem">' + (icons[state] || '▶️') + '</span>'
-    + '<span style="flex:1;font-size:0.82rem;color:#eef2ff;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">YouTube · ' + _ytCurrentSong.title + '</span>'
-    + (state === 'playing'
-        ? '<button onclick="ytPause()" style="background:rgba(255,255,255,0.1);border:none;border-radius:7px;color:#eef2ff;padding:5px 12px;cursor:pointer;font-size:0.78rem">⏸ Pausar</button>'
-        : '<button onclick="ytPlay()"  style="background:rgba(255,255,255,0.1);border:none;border-radius:7px;color:#eef2ff;padding:5px 12px;cursor:pointer;font-size:0.78rem">▶ Retomar</button>')
-    + '<button onclick="ytStop()" style="background:none;border:none;color:#7a8eb0;padding:5px 8px;cursor:pointer;font-size:0.85rem">✕</button>'
-    + '</div>';
-  bar.style.display = 'block';
-}
-
-function ytPlay()  { if (_ytPlayer && _ytPlayer.playVideo)  _ytPlayer.playVideo(); }
-function ytPause() { if (_ytPlayer && _ytPlayer.pauseVideo) _ytPlayer.pauseVideo(); }
-function ytStop()  {
-  if (_ytPlayer && _ytPlayer.stopVideo) _ytPlayer.stopVideo();
-  var bar = document.getElementById('ytMiniBar');
-  if (bar) bar.style.display = 'none';
-  var container = document.getElementById('yt-player-container');
-  if (container) {
-    container.style.display = 'none';
-    // Reset for next video
-    _ytPlayer = null;
-    container.innerHTML = '<div id="yt-player-div"></div>';
-  }
-}
 
 // ── Render video tab (replaces old renderSongVideoTab) ──
 function renderSongVideoTab(song) {
@@ -3717,77 +3582,197 @@ function renderSongVideoTab(song) {
   var el = document.getElementById('sd-video');
   if (!el) return;
 
-  var yt  = song.youtube;
-  var loc = videos[song.id] && videos[song.id].url;
+  var yt  = song.youtube || '';
+  var loc = (videos[song.id] && videos[song.id].url) ? videos[song.id].url : '';
   var html = '';
 
-  // Local video
   if (loc) {
-    html +=
-      '<div style="margin-bottom:20px">'
-      + '<div style="font-size:0.72rem;font-weight:700;color:#c8920a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">📹 Vídeo Local (Offline)</div>'
-      + '<video controls src="' + loc + '" style="width:100%;border-radius:14px;background:#000;max-height:280px;display:block"></video>'
-      + '</div>';
+    html += '<div style="margin-bottom:20px">'
+          + '<div style="font-size:0.72rem;font-weight:700;color:#c8920a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">📹 Vídeo Local</div>'
+          + '<video controls src="' + loc + '" style="width:100%;border-radius:14px;background:#000;max-height:280px;display:block"></video>'
+          + '</div>';
   }
 
-  // YouTube
   if (yt) {
-    var thumb = 'https://img.youtube.com/vi/' + yt + '/hqdefault.jpg';
-    html +=
-      '<div>'
-      + '<div style="font-size:0.72rem;font-weight:700;color:#c8920a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">▶️ YouTube</div>'
+    var watchUrl = 'https://www.youtube.com/watch?v=' + yt;
+    var thumb    = 'https://img.youtube.com/vi/' + yt + '/hqdefault.jpg';
+    var thumbMax = 'https://img.youtube.com/vi/' + yt + '/maxresdefault.jpg';
 
-      // Thumbnail preview with play button
-      + '<div id="yt-thumb-' + yt + '" onclick="startYTPlayer(\'' + yt + '\')" style="position:relative;cursor:pointer;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:16/9;margin-bottom:12px">'
-      + '<img src="' + thumb + '" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.style.display=\'none\'">'
-      + '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35)">'
-      + '<div style="width:68px;height:68px;background:rgba(181,30,36,0.92);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(181,30,36,0.5);transition:transform .2s" onmouseover="this.style.transform=\'scale(1.1)\'" onmouseout="this.style.transform=\'scale(1)\'">'
-      + '<span style="font-size:1.8rem;margin-left:5px">▶</span>'
-      + '</div>'
-      + '</div>'
-      + '<div style="position:absolute;bottom:10px;right:12px;background:rgba(0,0,0,0.75);color:#fff;font-size:0.72rem;padding:3px 8px;border-radius:5px;font-family:\'Outfit\',sans-serif">YouTube</div>'
-      + '</div>'
-
-      // Player container (hidden until play)
-      + '<div id="yt-player-container" style="display:none;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:16/9;margin-bottom:12px">'
-      + '<div id="yt-player-div"></div>'
-      + '</div>'
-
-      // Controls row
-      + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
-      + '<button onclick="startYTPlayer(\'' + yt + '\')" class="btn-g" style="flex:1;padding:11px 16px;font-size:0.88rem">▶ Reproduzir</button>'
-      + '<button onclick="window.open(\'https://www.youtube.com/watch?v=' + yt + '\',\'_blank\')" style="background:rgba(181,30,36,0.18);border:1.5px solid rgba(181,30,36,0.35);border-radius:10px;color:#ff8080;padding:11px 16px;cursor:pointer;font-family:\'Outfit\',sans-serif;font-size:0.82rem;font-weight:600">📱 Abrir no YouTube</button>'
-      + '</div>'
-
-      // YT mini control bar
-      + '<div id="ytMiniBar" style="display:none;margin-top:10px;border-radius:10px;overflow:hidden"></div>'
-      + '</div>';
+    html += '<div>'
+          + '<div style="font-size:0.72rem;font-weight:700;color:#c8920a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">▶️ YouTube</div>'
+          + '<div id="yt-tw-' + yt + '" onclick="embedYT(this.dataset.vid)" data-vid="' + yt + '" style="position:relative;border-radius:14px;overflow:hidden;background:#0a0a0a;aspect-ratio:16/9;cursor:pointer;margin-bottom:14px;box-shadow:0 4px 24px rgba(0,0,0,0.5)">'
+            + '<img src="' + thumbMax + '" onerror="this.onerror=null;this.src=this.dataset.fb" data-fb="' + thumb + '" style="width:100%;height:100%;object-fit:cover;display:block">'
+            + '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.25)">'
+              + '<div style="width:72px;height:72px;background:rgba(181,30,36,0.95);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(181,30,36,0.6)">'
+                + '<span style="font-size:2rem;color:#fff;margin-left:6px">&#9654;</span>'
+              + '</div>'
+              + '<div style="margin-top:10px;background:rgba(0,0,0,0.65);color:#fff;font-size:0.72rem;padding:4px 12px;border-radius:20px">Toca para reproduzir</div>'
+            + '</div>'
+          + '</div>'
+          + '<div id="yt-em-' + yt + '" style="display:none;border-radius:14px;overflow:hidden;aspect-ratio:16/9;background:#000;margin-bottom:14px;position:relative"></div>'
+          + '<div id="yt-er-' + yt + '" style="display:none;background:rgba(181,30,36,0.1);border:1.5px solid rgba(181,30,36,0.3);border-radius:14px;padding:28px;text-align:center;margin-bottom:14px">'
+            + '<div style="font-size:2.4rem;margin-bottom:10px">&#128683;</div>'
+            + '<div style="color:#ff8080;font-weight:700;margin-bottom:6px">Reprodução incorporada bloqueada</div>'
+            + '<div style="color:#7a8eb0;font-size:0.82rem;margin-bottom:18px">O proprietário do vídeo não permite reprodução incorporada. Abre directamente no YouTube.</div>'
+            + '<a href="' + watchUrl + '" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#b91c1c,#ef4444);border-radius:10px;color:#fff;padding:12px 24px;text-decoration:none;font-size:0.9rem;font-weight:700">'
+              + '&#9654; Abrir no YouTube'
+            + '</a>'
+          + '</div>'
+          + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+            + '<button class="btn-g" onclick="embedYT(this.dataset.vid)" data-vid="' + yt + '" style="flex:1;padding:11px 16px;font-size:0.88rem;min-width:120px">&#9654; Reproduzir</button>'
+            + '<a href="' + watchUrl + '" target="_blank" style="display:flex;align-items:center;gap:6px;background:rgba(181,30,36,0.15);border:1.5px solid rgba(181,30,36,0.35);border-radius:10px;color:#ff8080;padding:11px 16px;text-decoration:none;font-size:0.82rem;font-weight:600;white-space:nowrap">&#128241; Ver no YouTube</a>'
+          + '</div>'
+          + '</div>';
   }
 
-  if (!html) {
-    html = '<div class="no-media">📺 Sem vídeo.<br><small style="color:var(--gray);display:block;margin-top:8px">Admin pode adicionar em Admin → Vídeos</small></div>';
+  if (!loc && !yt) {
+    html = '<div class="no-media">&#128250; Sem v&iacute;deo.<br><small style="color:var(--gray);display:block;margin-top:8px">Admin pode adicionar em Admin &rarr; V&iacute;deos</small></div>';
   }
 
   el.innerHTML = html;
 }
+function embedYT(videoId) {
+  var thumbWrap = document.getElementById('yt-tw-' + videoId);
+  var embedBox  = document.getElementById('yt-em-' + videoId);
+  var errBox    = document.getElementById('yt-er-' + videoId);
+  if (!embedBox) return;
 
-// ── Start player (hides thumbnail, shows iframe) ──
-function startYTPlayer(videoId) {
   // Hide thumbnail
-  var thumb = document.getElementById('yt-thumb-' + videoId);
-  if (thumb) thumb.style.display = 'none';
+  if (thumbWrap) thumbWrap.style.display = 'none';
+  if (errBox)    errBox.style.display    = 'none';
+  embedBox.style.display = 'block';
+  embedBox.scrollIntoView({behavior:'smooth', block:'center'});
 
-  // Reset player container
-  var container = document.getElementById('yt-player-container');
-  if (container) {
-    container.style.display = 'block';
-    container.innerHTML = '<div id="yt-player-div"></div>';
-    _ytPlayer = null;
+  // Show loading spinner first
+  embedBox.innerHTML =
+    '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;background:#0a0a0a">'
+    + '<div style="width:44px;height:44px;border:3px solid rgba(255,255,255,0.1);border-top-color:#c8920a;border-radius:50%;animation:spin 0.8s linear infinite"></div>'
+    + '<div style="color:#7a8eb0;font-size:0.82rem;font-family:\'Outfit\',sans-serif">A carregar vídeo...</div>'
+    + '</div>';
+
+  // Use youtube-nocookie.com for best compatibility + all permissions
+  var url = 'https://www.youtube-nocookie.com/embed/' + videoId
+    + '?autoplay=1'
+    + '&rel=0'
+    + '&modestbranding=1'
+    + '&playsinline=1'
+    + '&color=white'
+    + '&enablejsapi=1'
+    + '&origin=' + encodeURIComponent(location.origin || 'https://louvorj7msc.vercel.app');
+
+  var iframe = document.createElement('iframe');
+  iframe.src = url;
+  iframe.style.cssText = 'width:100%;height:100%;border:none;display:block;position:absolute;inset:0';
+  iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+  iframe.allowFullscreen = true;
+  iframe.loading = 'eager';
+
+  // Wrap iframe for absolute positioning
+  embedBox.innerHTML = '';
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative;width:100%;height:100%';
+  wrap.appendChild(iframe);
+  embedBox.appendChild(wrap);
+
+  // Detect if video is blocked: YouTube sends postMessage on error
+  var _watchUrl = 'https://www.youtube.com/watch?v=' + videoId;
+  var _blocked  = false;
+  var _loaded   = false;
+
+  iframe.addEventListener('load', function() {
+    _loaded = true;
+    // Give it 1.5s — if no play event arrives, show open-in-youtube hint
+    setTimeout(function() {
+      if (!_blocked) {
+        // Video might be playing — add subtle open-in-yt button below
+        var hint = document.getElementById('yt-hint-' + videoId);
+        if (!hint) {
+          hint = document.createElement('div');
+          hint.id = 'yt-hint-' + videoId;
+          hint.style.cssText = 'text-align:right;margin-top:8px';
+          hint.innerHTML = '<a href="' + _watchUrl + '" target="_blank" '
+            + 'style="color:#7a8eb0;font-size:0.75rem;font-family:\'Outfit\',sans-serif;text-decoration:none">'
+            + '📱 Abrir no YouTube ↗</a>';
+          embedBox.parentNode && embedBox.parentNode.insertBefore(hint, embedBox.nextSibling);
+        }
+      }
+    }, 1500);
+  });
+
+  // Listen for YouTube errors via postMessage
+  function ytMsgHandler(evt) {
+    try {
+      var data = typeof evt.data === 'string' ? JSON.parse(evt.data) : evt.data;
+      if (!data) return;
+      // YouTube sends {event:'infoDelivery', info:{playerState:-1}} on errors
+      if (data.event === 'onError' || (data.info && data.info.error)) {
+        _blocked = true;
+        window.removeEventListener('message', ytMsgHandler);
+        showYTBlockedMessage(videoId, embedBox, errBox, thumbWrap, _watchUrl);
+      }
+    } catch(e) {}
   }
+  window.addEventListener('message', ytMsgHandler);
 
-  playYouTube(videoId);
+  // Fallback: if iframe fails to load at all after 8s, show blocked message
+  setTimeout(function() {
+    if (!_loaded && !_blocked) {
+      _blocked = true;
+      window.removeEventListener('message', ytMsgHandler);
+      showYTBlockedMessage(videoId, embedBox, errBox, thumbWrap, _watchUrl);
+    }
+  }, 8000);
 }
 
+// ── Show fallback when video is blocked or unavailable ──
+function showYTBlockedMessage(videoId, embedBox, errBox, thumbWrap, watchUrl) {
+  if (!embedBox) {
+    embedBox = document.getElementById('yt-em-' + videoId);
+    errBox   = document.getElementById('yt-er-' + videoId);
+    thumbWrap= document.getElementById('yt-tw-' + videoId);
+    watchUrl = 'https://www.youtube.com/watch?v=' + videoId;
+  }
+  if (embedBox) embedBox.style.display = 'none';
+  if (errBox) {
+    errBox.style.display = 'block';
+  } else if (embedBox && embedBox.parentNode) {
+    // Create inline error
+    var errDiv = document.createElement('div');
+    errDiv.style.cssText = 'background:rgba(181,30,36,0.1);border:1.5px solid rgba(181,30,36,0.3);border-radius:14px;padding:28px;text-align:center;margin-bottom:14px';
+    errDiv.innerHTML =
+      '<div style="font-size:2.4rem;margin-bottom:12px">🚫</div>'
+      + '<div style="color:#ff8080;font-weight:700;font-size:1rem;margin-bottom:6px">Reprodução incorporada bloqueada</div>'
+      + '<div style="color:#7a8eb0;font-size:0.82rem;margin-bottom:20px">O proprietário do vídeo não permite reprodução incorporada.<br>Abre directamente no YouTube:</div>'
+      + '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">'
+      + '<a href="' + watchUrl + '" target="_blank" '
+        + 'style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#b91c1c,#ef4444);border-radius:10px;color:#fff;padding:12px 24px;text-decoration:none;font-family:\'Outfit\',sans-serif;font-size:0.9rem;font-weight:700;box-shadow:0 4px 14px rgba(181,30,36,0.4)">'
+        + '<svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 00.5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 002.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 002.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.7 15.5V8.5l6.3 3.5-6.3 3.5z"/></svg>'
+        + 'Abrir no YouTube'
+        + '</a>'
+      + '</div>';
+    embedBox.parentNode.insertBefore(errDiv, embedBox.nextSibling);
+    if (thumbWrap) thumbWrap.style.display = 'block'; // restore thumbnail
+  }
+}
+
+// ── YouTube embed CSS (spinner) ──
+(function() {
+  if (document.getElementById('yt-spin-css')) return;
+  var s = document.createElement('style');
+  s.id = 'yt-spin-css';
+  s.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+  document.head.appendChild(s);
+})();
+
+function ytEmbedFailed(videoId) {
+  var embedBox = document.getElementById('yt-em-' + videoId);
+  var errBox   = document.getElementById('yt-err-'   + videoId);
+  if (embedBox) embedBox.style.display = 'none';
+  if (errBox)   errBox.style.display   = 'block';
+}
+
+
+// ── Start player (hides thumbnail, shows iframe) ──
 
 // ════════════════════════════════════════════════════════════════
 // ACTIVIDADES — Engine dinâmico
