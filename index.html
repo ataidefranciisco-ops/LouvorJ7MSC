@@ -32,38 +32,78 @@ const blob = new Blob([JSON.stringify(manifestData)], {type:'application/json'})
 const manifestURL = URL.createObjectURL(blob);
 document.getElementById('pwaManifest').href = manifestURL;
 
-// ── Service Worker Registration ──
+// ── Service Worker Registration (Blob inline — sem dependência de sw.js externo) ──
 (function() {
-  // Não registar em iframes, contextos inseguros ou file://
-  var isIframe   = window.self !== window.top;
-  var isSecure   = location.protocol === 'https:' || location.hostname === 'localhost';
-  var isVercel   = location.hostname.indexOf('vercel.app') > -1 ||
-                   location.hostname.indexOf('louvor') > -1;
+  var isIframe = window.self !== window.top;
+  var isSecure = location.protocol === 'https:' || location.hostname === 'localhost';
 
-  if (!('serviceWorker' in navigator) || isIframe || !isSecure) {
-    // Silencioso — sem mensagem de erro no console
-    return;
-  }
+  if (!('serviceWorker' in navigator) || isIframe || !isSecure) return;
+
+  // SW embutido via Blob para funcionar em qualquer domínio sem ficheiro externo
+  var swCode = [
+    'var CACHE="louvor-j7msc-v1";',
+    'var OFFLINE="/";',
+    'var PRE_CACHE=["/","manifest.json"];',
+    'self.addEventListener("install",function(e){',
+    '  e.waitUntil(caches.open(CACHE).then(function(c){',
+    '    return c.addAll(PRE_CACHE).catch(function(){});',
+    '  }));',
+    '  self.skipWaiting();',
+    '});',
+    'self.addEventListener("activate",function(e){',
+    '  e.waitUntil(caches.keys().then(function(keys){',
+    '    return Promise.all(keys.filter(function(k){return k!==CACHE;}).map(function(k){return caches.delete(k);}));',
+    '  }));',
+    '  self.clients.claim();',
+    '});',
+    'self.addEventListener("fetch",function(e){',
+    '  if(e.request.method!=="GET")return;',
+    '  var url=new URL(e.request.url);',
+    '  if(url.origin!==location.origin)return;',
+    '  e.respondWith(caches.match(e.request).then(function(cached){',
+    '    if(cached)return cached;',
+    '    return fetch(e.request).then(function(res){',
+    '      if(res&&res.status===200&&res.type==="basic"){',
+    '        var clone=res.clone();',
+    '        caches.open(CACHE).then(function(c){c.put(e.request,clone);});',
+    '      }',
+    '      return res;',
+    '    }).catch(function(){',
+    '      if(e.request.destination==="document")return caches.match(OFFLINE);',
+    '    });',
+    '  }));',
+    '});'
+  ].join('\n');
 
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('/sw.js', {scope: '/'})
-      .then(function(reg) {
-        console.log('[SW] ✅ Registado — App instalável offline');
-        reg.onupdatefound = function() {
-          var w = reg.installing;
-          if (!w) return;
-          w.onstatechange = function() {
-            if (w.state === 'installed' && navigator.serviceWorker.controller) {
-              if (typeof toast === 'function') toast('🔄 App actualizado!');
-            }
+    try {
+      var blob = new Blob([swCode], {type: 'application/javascript'});
+      var swURL = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swURL)
+        .then(function(reg) {
+          console.log('[SW] ✅ Registado (inline blob)');
+          reg.onupdatefound = function() {
+            var w = reg.installing;
+            if (!w) return;
+            w.onstatechange = function() {
+              if (w.state === 'installed' && navigator.serviceWorker.controller) {
+                if (typeof toast === 'function') toast('🔄 App actualizado!');
+              }
+            };
           };
-        };
-      })
-      .catch(function(err) {
-        // Silencioso em contextos onde SW não é suportado
-        // (ex: iframe, desenvolvimento local)
-        if (isVercel) console.warn('[SW] Registo falhou:', err.message);
-      });
+        })
+        .catch(function(err) {
+          console.warn('[SW] Blob falhou, a tentar /sw.js:', err.message);
+          // Fallback para /sw.js (funciona no Vercel)
+          navigator.serviceWorker.register('/sw.js', {scope: '/'})
+            .then(function(){ console.log('[SW] ✅ Registado via /sw.js'); })
+            .catch(function(e2){ /* silencioso */ });
+        });
+    } catch(e) {
+      // Fallback directo para /sw.js
+      navigator.serviceWorker.register('/sw.js', {scope: '/'})
+        .catch(function(){});
+    }
   });
 })();
 
@@ -607,12 +647,6 @@ audio::-webkit-media-controls-panel{background:var(--s2);}
 #yt-player-div { width:100%; height:100%; }
 
 </style>
-
-<link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
 </head>
 <body>
 
@@ -4166,44 +4200,5 @@ function renderEventOptions() {
   </div>
 </div>
 
-
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then(reg => {
-        reg.onupdatefound = () => {
-          const newWorker = reg.installing;
-          newWorker.onstatechange = () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              window.location.reload();
-            }
-          };
-        };
-      })
-      .catch(err => console.log('Erro SW:', err));
-  });
-}
-</script>
-<!-- PWA -->
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#060e1f">
-<meta name="mobile-web-app-capable" content="yes">
-
-<!-- iOS (Safari) -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Louvor">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
-
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/service-worker.js')
-        .then(reg => console.log('SW registado:', reg.scope))
-        .catch(err => console.log('SW erro:', err));
-    });
-  }
-</script>
 </body>
 </html>

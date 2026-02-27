@@ -1,64 +1,88 @@
-// Louvor J7MSC — Service Worker
-// Cache-first para assets, network-first para API Bíblia
-const CACHE = 'j7msc-v2';
-const SHELL = 'j7msc-shell-v2';
+/* ══════════════════════════════════════════════
+   Louvor J7MSC — Service Worker
+   Cache-first com fallback de rede
+   ══════════════════════════════════════════════ */
 
-self.addEventListener('install', function(e) {
-  self.skipWaiting();
-  e.waitUntil(caches.open(SHELL).then(function(c) {
-    return c.addAll(['/']).catch(function(){});
-  }));
-});
+const CACHE_NAME   = 'louvor-j7msc-v1';
+const OFFLINE_URL  = '/index.html';
 
-self.addEventListener('activate', function(e) {
-  e.waitUntil(
-    caches.keys().then(function(keys) {
-      return Promise.all(
-        keys.filter(function(k){ return k !== CACHE && k !== SHELL; })
-            .map(function(k){ return caches.delete(k); })
-      );
-    }).then(function(){ return self.clients.claim(); })
+/* Ficheiros a pré-cachear na instalação */
+const PRE_CACHE = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png'
+];
+
+/* ── Install ── */
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(PRE_CACHE))
   );
+  self.skipWaiting();
 });
 
-self.addEventListener('fetch', function(e) {
-  var url = e.request.url;
-  if (e.request.method !== 'GET') return;
-  if (url.startsWith('chrome-extension')) return;
-  if (url.startsWith('blob:')) return;
+/* ── Activate: apaga caches antigas ── */
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(
+        keys
+          .filter(k => k !== CACHE_NAME)
+          .map(k => caches.delete(k))
+      )
+    )
+  );
+  self.clients.claim();
+});
 
-  // Bible API: network first, fallback to cache
-  if (url.indexOf('bible-api.com') > -1) {
-    e.respondWith(
-      fetch(e.request).then(function(res) {
-        if (res.ok) {
-          var clone = res.clone();
-          caches.open(CACHE).then(function(c){ c.put(e.request, clone); });
-        }
-        return res;
-      }).catch(function() {
-        return caches.match(e.request).then(function(cached){
-          return cached || new Response(
-            JSON.stringify({error:'offline', verses:[]}),
-            {headers:{'Content-Type':'application/json'}}
-          );
+/* ── Fetch: Cache-first, fallback rede, fallback offline ── */
+self.addEventListener('fetch', event => {
+  /* Ignora pedidos não-GET e pedidos externos (ex: YouTube, Spotify) */
+  if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+  if (url.origin !== location.origin) return;
+
+  event.respondWith(
+    caches.match(event.request).then(cached => {
+      if (cached) return cached;
+
+      return fetch(event.request)
+        .then(response => {
+          /* Guarda uma cópia no cache se for uma resposta válida */
+          if (response && response.status === 200 && response.type === 'basic') {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => {
+          /* Offline fallback para navegação */
+          if (event.request.destination === 'document') {
+            return caches.match(OFFLINE_URL);
+          }
         });
-      })
-    );
-    return;
-  }
-
-  // Everything else: cache first, then network
-  e.respondWith(
-    caches.match(e.request).then(function(cached) {
-      var netFetch = fetch(e.request).then(function(res) {
-        if (res.ok && res.status === 200) {
-          var clone = res.clone();
-          caches.open(SHELL).then(function(c){ c.put(e.request, clone); });
-        }
-        return res;
-      }).catch(function(){ return cached; });
-      return cached || netFetch;
     })
   );
+});
+
+/* ── Background Sync (opcional, para funcionalidades futuras) ── */
+self.addEventListener('sync', event => {
+  if (event.tag === 'sync-data') {
+    // reservado para futuras sincronizações
+  }
+});
+
+/* ── Push Notifications (opcional) ── */
+self.addEventListener('push', event => {
+  if (!event.data) return;
+  const data = event.data.json();
+  self.registration.showNotification(data.title || 'Louvor J7MSC', {
+    body:    data.body   || '',
+    icon:    '/icons/icon-192.png',
+    badge:   '/icons/icon-96.png',
+    vibrate: [200, 100, 200]
+  });
 });
